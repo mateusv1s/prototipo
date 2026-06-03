@@ -1,0 +1,20 @@
+chave,mensagem
+saudacao,"Oi, tudo bem? Para continuar com o seu atendimento é necessário validar o CPF.
+
+Me informe o seu CPF."
+cpf_invalido,CPF inválido. Digite novamente.
+menu,"Perfeito! Essas são nossas opções:
+
+- listar produtos
+- cadastrar produto
+- sair"
+precisa_cpf,Olá! Para iniciar o atendimento me informe o seu CPF.
+sair,Atendimento encerrado. Até logo.
+nao_entendi,Não entendi sua solicitação. Digite 'ajuda' para ver as opções.
+id_produto,Claro! Qual o ID do produto?
+nome_produto,Qual o nome do produto?
+tamanho_produto,"Qual o tamanho? (P, M, G ou GG)"
+tamanho_invalido,"Tamanho inválido. Digite P, M, G ou GG."
+cor_produto,Qual a cor do produto?
+quantidade_produto,Me informe a quantidade de itens.
+quantidade_invalida,A quantidade deve ser maior que zero.
