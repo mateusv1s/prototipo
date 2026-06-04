@@ -86,6 +86,7 @@ public class ChatController {
                 return "Valeu pela visita, parceiro! Ate a proxima!";
             }
 
+            // ─── Fluxo de autenticação ───────────────────────────────────────────────
             if (!sessao.isCpfValidado()) {
 
                 if (sessao.getEstado() == EstadoConversa.AGUARDANDO_COMANDO && isSaudacao(t)) {
@@ -114,10 +115,33 @@ public class ChatController {
                 return "Opa! Me manda seu nome pra comecar o atendimento.";
             }
 
+            // ─── Usuário JÁ autenticado: trata saudação interpretando a intenção ────
+            if (sessao.getEstado() == EstadoConversa.AGUARDANDO_COMANDO && isSaudacao(t)) {
+
+                // Saudação veio junto com intenção de compra? Ex: "oi, quero 2 camisas"
+                if (isIntencaoDeCompra(t)) {
+                    return "Como posso ajudar?\n\n" + processarCompra(texto, t, sessao);
+                }
+
+                // Saudação veio junto com pedido de listagem?
+                if (t.contains("listar") || t.contains("produto") || t.contains("tem ") || t.contains("tem?")) {
+                    return "Como posso ajudar?\n\n" + listarProdutos();
+                }
+
+                // Saudação veio junto com pedido de menu/ajuda?
+                if (isMenu(t)) {
+                    return "Como posso ajudar?\n\n" + menuTexto();
+                }
+
+                // Saudação simples — só responde e aguarda
+                return "Como posso ajudar?";
+            }
+
             if (isMenu(t) && sessao.getEstado() == EstadoConversa.AGUARDANDO_COMANDO) {
                 return "Claro! Ta na mao:\n\n" + menuTexto();
             }
 
+            // ─── Confirmação de endereço ─────────────────────────────────────────────
             if (sessao.getEstado() == EstadoConversa.AGUARDANDO_CONFIRMACAO_ENDERECO) {
 
                 if (isSimResposta(t)) {
@@ -144,6 +168,7 @@ public class ChatController {
                         + sessao.getEndereco() + ")? Responde sim ou nao!";
             }
 
+            // ─── Endereço ────────────────────────────────────────────────────────────
             if (sessao.getEstado() == EstadoConversa.AGUARDANDO_ENDERECO) {
 
                 if (ehPergunta(t)) {
@@ -160,6 +185,7 @@ public class ChatController {
                 return "Anotado! " + perguntarPagamento(sessao);
             }
 
+            // ─── Pagamento ───────────────────────────────────────────────────────────
             if (sessao.getEstado() == EstadoConversa.AGUARDANDO_PAGAMENTO) {
 
                 if (isSimResposta(t) && sessao.getPagamentoPreferido() != null) {
@@ -191,25 +217,9 @@ public class ChatController {
                         + " " + ultimo.getCor() + " saindo!\nEstoque restante: " + ultimo.getQuantidade();
             }
 
+            // ─── Intenção de compra ──────────────────────────────────────────────────
             if (isIntencaoDeCompra(t) && sessao.getEstado() == EstadoConversa.AGUARDANDO_COMANDO) {
-
-                String nomeProduto = extrairNomeProduto(t);
-                String tamanho    = extrairTamanho(t);
-                String cor        = extrairCor(t);
-                int quantidade    = extrairQuantidade(t);
-
-                sessao.setNomeProduto(nomeProduto);
-                sessao.setCorProduto(cor.isEmpty() ? "sem cor" : cor);
-                sessao.setQuantidadeDesejada(quantidade);
-                sessao.setDescricaoOriginalPedido(quantidade + " " + nomeProduto
-                        + (cor.isEmpty() ? "" : " " + cor));
-
-                if (tamanho.isEmpty()) {
-                    sessao.setEstado(EstadoConversa.AGUARDANDO_TAMANHO_COMPRA);
-                    return "Qual o tamanho que voce quer? (PP, P, M, G, GG, XG, XGG)";
-                }
-
-                return avancarCompraComTamanho(tamanho, sessao);
+                return processarCompra(texto, t, sessao);
             }
 
             if (sessao.getEstado() == EstadoConversa.AGUARDANDO_TAMANHO_COMPRA) {
@@ -218,6 +228,7 @@ public class ChatController {
                 return avancarCompraComTamanho(tamanho, sessao);
             }
 
+            // ─── Switch de comandos principais ──────────────────────────────────────
             switch (sessao.getEstado()) {
 
                 case AGUARDANDO_COMANDO:
@@ -296,6 +307,30 @@ public class ChatController {
         } catch (Exception e) {
             return "Erro inesperado: " + e.getMessage();
         }
+    }
+
+    /**
+     * Extrai a lógica de início de compra para evitar recursão no processar().
+     * Chamado tanto pelo fluxo normal quanto pelo tratamento de saudação + intenção.
+     */
+    private String processarCompra(String texto, String t, SessaoChat sessao) {
+        String nomeProduto = extrairNomeProduto(t);
+        String tamanho     = extrairTamanho(t);
+        String cor         = extrairCor(t);
+        int quantidade     = extrairQuantidade(t);
+
+        sessao.setNomeProduto(nomeProduto);
+        sessao.setCorProduto(cor.isEmpty() ? "sem cor" : cor);
+        sessao.setQuantidadeDesejada(quantidade);
+        sessao.setDescricaoOriginalPedido(quantidade + " " + nomeProduto
+                + (cor.isEmpty() ? "" : " " + cor));
+
+        if (tamanho.isEmpty()) {
+            sessao.setEstado(EstadoConversa.AGUARDANDO_TAMANHO_COMPRA);
+            return "Qual o tamanho que voce quer? (PP, P, M, G, GG, XG, XGG)";
+        }
+
+        return avancarCompraComTamanho(tamanho, sessao);
     }
 
     private String tentarInferirIntencao(String t, SessaoChat sessao) {
@@ -451,16 +486,28 @@ public class ChatController {
         sessao.setQuantidadeDesejada(0);
     }
 
+    // ─── Helpers de detecção ────────────────────────────────────────────────────
+
     private boolean isSaudacao(String t) {
-        return t.equals("oi") || t.equals("ola") || t.equals("olá") || t.equals("bom dia")
+        // Correspondências exatas
+        if (t.equals("oi") || t.equals("ola") || t.equals("olá") || t.equals("bom dia")
                 || t.equals("boa tarde") || t.equals("boa noite") || t.equals("eae") || t.equals("e ai")
                 || t.equals("e aí") || t.equals("iae") || t.equals("fala") || t.equals("salve")
                 || t.equals("opa") || t.equals("coe") || t.equals("hey") || t.equals("ei")
                 || t.equals("tudo bem") || t.equals("tudo bom") || t.equals("qual e") || t.equals("qual é")
                 || t.equals("bora") || t.equals("fala ai") || t.equals("fala aí") || t.equals("boa")
                 || t.equals("slc") || t.equals("fala tu") || t.equals("oxe") || t.equals("uai")
-                || t.equals("vim comprar") || t.equals("vim ver") || t.equals("saudacoes")
-                || t.startsWith("bom dia") || t.startsWith("boa tarde") || t.startsWith("boa noite");
+                || t.equals("vim comprar") || t.equals("vim ver") || t.equals("saudacoes")) {
+            return true;
+        }
+        // Prefixos (saudação + texto junto, ex: "oi, quero comprar")
+        if (t.startsWith("bom dia") || t.startsWith("boa tarde") || t.startsWith("boa noite")
+                || t.startsWith("oi ") || t.startsWith("oi,") || t.startsWith("olá ")
+                || t.startsWith("ola ") || t.startsWith("eae ") || t.startsWith("salve ")
+                || t.startsWith("hey ") || t.startsWith("opa ") || t.startsWith("fala ")) {
+            return true;
+        }
+        return false;
     }
 
     private boolean isEncerrar(String t) {
