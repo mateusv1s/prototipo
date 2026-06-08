@@ -6,72 +6,87 @@ import java.util.List;
 public class SessaoChat {
 
     // ------------------------------------------------------------------ //
-    //  Histórico de conversa
+    //  Tipos internos
     // ------------------------------------------------------------------ //
 
-    // Classe interna simples no lugar de record — compatível com Java 17 sem --enable-preview.
     public static class Mensagem {
         private final String autor;
         private final String texto;
-
-        public Mensagem(String autor, String texto) {
-            this.autor = autor;
-            this.texto = texto;
-        }
-
+        public Mensagem(String autor, String texto) { this.autor = autor; this.texto = texto; }
         public String autor() { return autor; }
         public String texto() { return texto; }
     }
 
-    // "usuario" ou "bot" como autor.
-    // Limitamos a 30 mensagens (15 trocas) pra não crescer infinitamente.
+    // AJUSTADO: Agora salva a cor específica do item para não misturar os pedidos!
+    public static class ItemPedido {
+        public String tamanho;
+        public int quantidade;
+        public String cor; // <-- ADICIONADO ISSO AQUI
+
+        // Construtor vazio usado na extração do controller
+        public ItemPedido() {}
+
+        // Construtor completo caso precise em outro lugar
+        public ItemPedido(String tamanho, int quantidade, String cor) {
+            this.tamanho = tamanho;
+            this.quantidade = quantidade;
+            this.cor = cor;
+        }
+    }
+
+    // Pedido já finalizado — guardado no histórico da sessão.
+    public static class PedidoFinalizado {
+        public final String protocolo;
+        public final String nomeProduto;
+        public final String cor;
+        public final List<ItemPedido> itens;
+        public final int totalQuantidade;
+        public final double totalValor;
+        public final double desconto;       // valor do desconto aplicado (0 se não teve)
+        public final String endereco;
+        public final String pagamento;
+        public boolean cancelado = false;
+
+        public PedidoFinalizado(String protocolo, String nomeProduto, String cor,
+                                List<ItemPedido> itens, int totalQuantidade,
+                                double totalValor, double desconto,
+                                String endereco, String pagamento) {
+            this.protocolo      = protocolo;
+            this.nomeProduto    = nomeProduto;
+            this.cor            = cor;
+            this.itens          = new ArrayList<>(itens);
+            this.totalQuantidade = totalQuantidade;
+            this.totalValor     = totalValor;
+            this.desconto       = desconto;
+            this.endereco       = endereco;
+            this.pagamento      = pagamento;
+        }
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Histórico de conversa
+    // ------------------------------------------------------------------ //
+
     private final List<Mensagem> historico = new ArrayList<>();
     private static final int MAX_HISTORICO = 30;
 
-    public void registrarUsuario(String texto) {
-        adicionar("usuario", texto);
-    }
-
-    public void registrarBot(String texto) {
-        adicionar("bot", texto);
-    }
+    public void registrarUsuario(String texto) { adicionar("usuario", texto); }
+    public void registrarBot(String texto)     { adicionar("bot", texto); }
 
     private void adicionar(String autor, String texto) {
-        if (historico.size() >= MAX_HISTORICO) {
-            historico.remove(0);
-        }
+        if (historico.size() >= MAX_HISTORICO) historico.remove(0);
         historico.add(new Mensagem(autor, texto));
     }
 
-    public List<Mensagem> getHistorico() {
-        return historico;
-    }
+    public List<Mensagem> getHistorico() { return historico; }
 
-    // Retorna as últimas N mensagens do usuário (ignora as do bot).
-    // Útil pra buscar intenções anteriores sem ruído.
-    public List<String> getMensagensUsuario(int ultimas) {
-        List<String> result = new ArrayList<>();
-        for (int i = historico.size() - 1; i >= 0 && result.size() < ultimas; i--) {
-            if (historico.get(i).autor().equals("usuario")) {
-                result.add(0, historico.get(i).texto());
-            }
-        }
-        return result;
-    }
-
-    // Verifica se alguma mensagem anterior do usuário contém o trecho informado.
-    // Usado pra detectar preferências mencionadas antes (ex: "prefiro PIX").
     public boolean usuarioJaMencionou(String trecho) {
-        for (Mensagem m : historico) {
-            if (m.autor().equals("usuario") && m.texto().toLowerCase().contains(trecho.toLowerCase())) {
+        for (Mensagem m : historico)
+            if (m.autor().equals("usuario") && m.texto().toLowerCase().contains(trecho.toLowerCase()))
                 return true;
-            }
-        }
         return false;
     }
 
-    // Retorna a última mensagem do usuário antes da atual (penúltima do usuário).
-    // Útil pra entender o que ele queria quando mandou algo ambíguo.
     public String getMensagemAnteriorUsuario() {
         int count = 0;
         for (int i = historico.size() - 1; i >= 0; i--) {
@@ -83,8 +98,22 @@ public class SessaoChat {
         return "";
     }
 
-    public void limparHistorico() {
-        historico.clear();
+    public void limparHistorico() { historico.clear(); }
+
+    // ------------------------------------------------------------------ //
+    //  Pedidos finalizados na sessão
+    // ------------------------------------------------------------------ //
+
+    private final List<PedidoFinalizado> pedidosFinalizados = new ArrayList<>();
+
+    public void adicionarPedido(PedidoFinalizado p) { pedidosFinalizados.add(p); }
+    public List<PedidoFinalizado> getPedidosFinalizados() { return pedidosFinalizados; }
+
+    public PedidoFinalizado buscarPedidoPorProtocolo(String protocolo) {
+        for (PedidoFinalizado p : pedidosFinalizados)
+            if (p.protocolo.equalsIgnoreCase(protocolo.trim()))
+                return p;
+        return null;
     }
 
     // ------------------------------------------------------------------ //
@@ -92,14 +121,8 @@ public class SessaoChat {
     // ------------------------------------------------------------------ //
 
     private EstadoConversa estado = EstadoConversa.AGUARDANDO_COMANDO;
-    private boolean cpfValidado = false;
-
-    // Nome informado pelo usuário na autenticação.
+    private boolean cpfValidado   = false;
     private String nomeUsuario;
-
-    // Texto original que o usuário digitou ao pedir a compra.
-    // Ex: "cara vou querer 50 camisas azul do brasil"
-    // Guardamos pra repetir exatamente no resumo, sem filtrar nada.
     private String descricaoOriginalPedido;
 
     // ------------------------------------------------------------------ //
@@ -113,23 +136,27 @@ public class SessaoChat {
     private Integer quantidade;
 
     // ------------------------------------------------------------------ //
-    //  Dados de compra
+    //  Dados do pedido em andamento
     // ------------------------------------------------------------------ //
 
+    private List<ItemPedido> itensPedido = new ArrayList<>();
     private Produto ultimoProdutoComprado;
     private int ultimaQuantidadeComprada = 1;
     private Produto produtoSelecionado;
     private int quantidadeDesejada;
 
+    public int getQuantidadeTotalPedido() {
+        int total = 0;
+        for (ItemPedido i : itensPedido) total += i.quantidade;
+        return total;
+    }
+
     // ------------------------------------------------------------------ //
-    //  Dados do pedido — mantidos entre compras da mesma sessão
+    //  Dados persistentes da sessão
     // ------------------------------------------------------------------ //
 
     private String endereco;
     private String pagamento;
-
-    // Preferência de pagamento detectada no histórico (ex: usuário disse "costumo pagar no PIX").
-    // Sugerida automaticamente na próxima compra.
     private String pagamentoPreferido;
 
     // ------------------------------------------------------------------ //
@@ -137,7 +164,7 @@ public class SessaoChat {
     // ------------------------------------------------------------------ //
 
     public EstadoConversa getEstado() { return estado; }
-    public void setEstado(EstadoConversa estado) { this.estado = estado; }
+    public void setEstado(EstadoConversa v) { this.estado = v; }
 
     public boolean isCpfValidado() { return cpfValidado; }
     public void setCpfValidado(boolean v) { this.cpfValidado = v; }
@@ -174,6 +201,9 @@ public class SessaoChat {
 
     public int getQuantidadeDesejada() { return quantidadeDesejada; }
     public void setQuantidadeDesejada(int v) { this.quantidadeDesejada = v; }
+
+    public List<ItemPedido> getItensPedido() { return itensPedido; }
+    public void setItensPedido(List<ItemPedido> v) { this.itensPedido = v; }
 
     public String getEndereco() { return endereco; }
     public void setEndereco(String v) { this.endereco = v; }
