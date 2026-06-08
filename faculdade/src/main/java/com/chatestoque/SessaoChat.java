@@ -5,10 +5,6 @@ import java.util.List;
 
 public class SessaoChat {
 
-    // ------------------------------------------------------------------ //
-    //  Tipos internos
-    // ------------------------------------------------------------------ //
-
     public static class Mensagem {
         private final String autor;
         private final String texto;
@@ -17,24 +13,20 @@ public class SessaoChat {
         public String texto() { return texto; }
     }
 
-    // AJUSTADO: Agora salva a cor específica do item para não misturar os pedidos!
     public static class ItemPedido {
         public String tamanho;
         public int quantidade;
-        public String cor; // <-- ADICIONADO ISSO AQUI
+        public String cor;
 
-        // Construtor vazio usado na extração do controller
         public ItemPedido() {}
 
-        // Construtor completo caso precise em outro lugar
         public ItemPedido(String tamanho, int quantidade, String cor) {
             this.tamanho = tamanho;
-            this.quantidade = quantidade;
+            this.quantidade = quantity;
             this.cor = cor;
         }
     }
 
-    // Pedido já finalizado — guardado no histórico da sessão.
     public static class PedidoFinalizado {
         public final String protocolo;
         public final String nomeProduto;
@@ -42,7 +34,7 @@ public class SessaoChat {
         public final List<ItemPedido> itens;
         public final int totalQuantidade;
         public final double totalValor;
-        public final double desconto;       // valor do desconto aplicado (0 se não teve)
+        public final double desconto;       
         public final String endereco;
         public final String pagamento;
         public boolean cancelado = false;
@@ -62,10 +54,6 @@ public class SessaoChat {
             this.pagamento      = pagamento;
         }
     }
-
-    // ------------------------------------------------------------------ //
-    //  Histórico de conversa
-    // ------------------------------------------------------------------ //
 
     private final List<Mensagem> historico = new ArrayList<>();
     private static final int MAX_HISTORICO = 30;
@@ -100,10 +88,6 @@ public class SessaoChat {
 
     public void limparHistorico() { historico.clear(); }
 
-    // ------------------------------------------------------------------ //
-    //  Pedidos finalizados na sessão
-    // ------------------------------------------------------------------ //
-
     private final List<PedidoFinalizado> pedidosFinalizados = new ArrayList<>();
 
     public void adicionarPedido(PedidoFinalizado p) { pedidosFinalizados.add(p); }
@@ -116,28 +100,16 @@ public class SessaoChat {
         return null;
     }
 
-    // ------------------------------------------------------------------ //
-    //  Estado e flags
-    // ------------------------------------------------------------------ //
-
     private EstadoConversa estado = EstadoConversa.AGUARDANDO_COMANDO;
     private boolean cpfValidado   = false;
     private String nomeUsuario;
     private String descricaoOriginalPedido;
-
-    // ------------------------------------------------------------------ //
-    //  Dados de cadastro de produto
-    // ------------------------------------------------------------------ //
 
     private Integer idProduto;
     private String nomeProduto;
     private String tamanhoProduto;
     private String corProduto;
     private Integer quantidade;
-
-    // ------------------------------------------------------------------ //
-    //  Dados do pedido em andamento
-    // ------------------------------------------------------------------ //
 
     private List<ItemPedido> itensPedido = new ArrayList<>();
     private Produto ultimoProdutoComprado;
@@ -151,17 +123,9 @@ public class SessaoChat {
         return total;
     }
 
-    // ------------------------------------------------------------------ //
-    //  Dados persistentes da sessão
-    // ------------------------------------------------------------------ //
-
     private String endereco;
     private String pagamento;
     private String pagamentoPreferido;
-
-    // ------------------------------------------------------------------ //
-    //  Getters e setters
-    // ------------------------------------------------------------------ //
 
     public EstadoConversa getEstado() { return estado; }
     public void setEstado(EstadoConversa v) { this.estado = v; }
